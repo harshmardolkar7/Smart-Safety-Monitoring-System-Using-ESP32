@@ -1,0 +1,119 @@
+#include "DHT.h"
+
+// -------- DHT SENSOR --------
+#define DHTPIN 4
+#define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
+// -------- INPUTS --------
+#define FLAME_PIN 5
+#define GAS_PIN 34
+#define TRIG_PIN 18
+#define ECHO_PIN 19
+
+// -------- OUTPUTS --------
+#define BUZZER 23
+#define GREEN_LED 21
+#define RED_LED 25
+
+// R-Y-B LEDs
+#define R_LED 26
+#define Y_LED 27
+#define B_LED 14
+
+long duration;
+float distance;
+float temp = 0;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(FLAME_PIN, INPUT_PULLUP);
+  pinMode(GAS_PIN, INPUT);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  pinMode(BUZZER, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+
+  pinMode(R_LED, OUTPUT);
+  pinMode(Y_LED, OUTPUT);
+  pinMode(B_LED, OUTPUT);
+
+  digitalWrite(GREEN_LED, HIGH);
+  digitalWrite(RED_LED, LOW);
+
+  digitalWrite(R_LED, HIGH);
+  digitalWrite(Y_LED, HIGH);
+  digitalWrite(B_LED, HIGH);
+
+  dht.begin();
+}
+
+void loop() {
+
+  // -------- READ DHT (NON-BLOCKING STYLE) --------
+  static unsigned long lastDHT = 0;
+  if (millis() - lastDHT > 2000) {   // DHT every 2 sec
+    float t = dht.readTemperature();
+    if (!isnan(t)) temp = t;
+    lastDHT = millis();
+  }
+
+  int flame = digitalRead(FLAME_PIN);
+  int gas = analogRead(GAS_PIN);
+
+  // -------- ULTRASONIC (FAST) --------
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout added
+  if (duration > 0) {
+    distance = duration * 0.034 / 2;
+  }
+
+  // -------- SAFETY LOGIC --------
+  bool danger = false;
+
+  if (flame == 0) danger = true;
+  if (gas > 6000) danger = true;
+  if (distance < 20 && distance > 0) danger = true;
+  if (temp > 50) danger = true;
+
+  // -------- OUTPUT CONTROL --------
+  if (danger) {
+    digitalWrite(BUZZER, HIGH);
+
+    digitalWrite(RED_LED, HIGH);
+    digitalWrite(GREEN_LED, LOW);
+
+    digitalWrite(R_LED, LOW);
+    digitalWrite(Y_LED, LOW);
+    digitalWrite(B_LED, LOW);
+
+  } else {
+    digitalWrite(BUZZER, LOW);
+
+    digitalWrite(GREEN_LED, HIGH);
+    digitalWrite(RED_LED, LOW);
+
+    digitalWrite(R_LED, HIGH);
+    digitalWrite(Y_LED, HIGH);
+    digitalWrite(B_LED, HIGH);
+  }
+
+  // -------- REAL-TIME SERIAL OUTPUT --------
+  Serial.print("Temp: "); Serial.print(temp);
+  Serial.print(" | Flame: "); Serial.print(flame);
+  Serial.print(" | Gas: "); Serial.print(gas);
+  Serial.print(" | Dist: "); Serial.print(distance);
+  Serial.print(" | Status: ");
+  Serial.println(danger ? "DANGER" : "SAFE");
+
+  delay(500); // FAST UPDATE
+}
